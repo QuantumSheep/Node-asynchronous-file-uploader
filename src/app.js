@@ -1,18 +1,11 @@
 const express = require('express');
 const app = express();
 const formidable = require('formidable');
-const fs = require("fs");
 const http = require('http');
 const server = http.Server(app);
-const io = require('socket.io')(server);
-
-let clientSocket;
+const FileUploader = require('./FileUploader');
 
 app.use(express.static('views'));
-
-io.on('connection', (socket) => {
-    clientSocket = socket;
-});
 
 app.get('/', (req, res, next) => {
     res.sendFile('index.html');
@@ -21,32 +14,25 @@ app.get('/', (req, res, next) => {
 app.post('/uploadfile', (req, res, next) => {
     let form = new formidable.IncomingForm();
     form.keepExtensions = true;
+    form.multiples = true;
     form.parse(req);
 
-    form.on('progress', (br, be) => {
-        let oldPer = 0;
-        let per = (br * 100) / be;
-
-        if(clientSocket) {
-            clientSocket.emit('file progress', per);
-        }
-    });
+    form.on('error', (err) => {});
 
     form.on('file', function (name, file) {
-        if(file.size <= 20 * 1024 * 1024) {
-            let rstream = fs.createReadStream(file.path);
-            let wstream = fs.createWriteStream(__dirname + '/../uploads/' + file.name);
-            
-            rstream.pipe(wstream);
+        let fileupload = new FileUploader(__dirname + '/../uploads/');
 
-            wstream.on('finish', function () {
+        fileupload.upload(name, file, (err, wstream) => {
+            if (err) {
                 res.setHeader("Content-Type", "text/plain");
-                res.end('done');
-            });
-        } else {
-            res.setHeader("Content-Type", "text/plain");
-            res.end('error');
-        }
+                res.end(err);
+            } else {
+                wstream.on('finish', () => {
+                    res.setHeader("Content-Type", "text/plain");
+                    res.end('done');
+                });
+            }
+        });
     });
 });
 

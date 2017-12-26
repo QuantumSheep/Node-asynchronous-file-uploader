@@ -9,33 +9,52 @@
 </head>
 
 <body>
-    <form method="post" id="AscFU">
+    <form method="post" id="AscFU" enctype="multipart/form-data">
         <input type="file" name="file">
         <button type="submit">Envoyer le fichier</button>
     </form>
 
     <progress id="progress" value="0" max="100"></progress>
 
-    <script src="/socket.io/socket.io.js"></script>
     <script>
-        var socket = io();
+        document.forms.namedItem("AscFU").addEventListener('submit', (ev) => {
+            ev.preventDefault();
 
-        socket.on('file progress', (data) => {
-            document.getElementById("progress").value = data;
-        });
-
-        document.forms["AscFU"].onsubmit = () => {
             let data = new FormData();
+
+            if (document.forms["AscFU"].file.files[0].size > 20 * 1024 * 1024) {
+                alert("Error: This file is too heavy! 20MB maximum autorized.");
+                return;
+            }
+
             data.append("file", document.forms["AscFU"].file.files[0]);
 
             let req = new XMLHttpRequest();
 
             req.open("POST", "/uploadfile", true);
 
-            req.send(data);
+            req.addEventListener('error', (err) => {}, false);
 
-            return false;
-        }
+            req.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    var percentComplete = (e.loaded / e.total) * 100;
+                    document.getElementById("progress").value = percentComplete;
+                }
+            }, false);
+
+            req.addEventListener('load', () => {
+                switch (req.responseText) {
+                    case "done":
+                        alert("Upload of file '" + data.get("file").name + "' finished");
+                        break;
+                    case "FILETOOHEAVY":
+                        alert("Error: This file was too heavy!");
+                        break;
+                }
+            }, false);
+
+            req.send(data);
+        }, false);
     </script>
 </body>
 
